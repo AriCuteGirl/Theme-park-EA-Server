@@ -118,6 +118,7 @@ public class PMiPSP {
                     mayhemUserId = mid;
                     sessionKey = key;
                     loggedIn = true;
+                    com.tprevival.Brand.loggedIn();
                     Log.i(TAG, "logged in: mayhemUserId=" + mid);
                     post(EV_MAYHEM_IDS_DONE, 0, 0);
                 } catch (Throwable e) {

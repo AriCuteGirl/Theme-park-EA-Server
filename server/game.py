@@ -695,6 +695,13 @@ def _result(ok, message, **extra):
 
 def handle_tp(mid, user, seg, dirty):
     cmd = seg[0] if seg else ""
+    if cmd == "hello":
+        # the app shows a "how to add friends" tip on the first few starts
+        shown = user.get("hintsShown", 0)
+        if shown < 3:
+            user["hintsShown"] = shown + 1
+            save_user(mid, user)
+        return 200, _xml_obj("Hello", {"hint": 1 if shown < 3 else 0})
     if cmd == "me":
         code = friend_code(user)
         save_user(mid, user)

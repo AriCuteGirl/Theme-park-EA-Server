@@ -18,7 +18,7 @@ import java.util.ArrayList;
  * it opens the revival menu: friend code, add friends, promo codes, name.
  */
 public class Brand {
-    public static final String TEXT = "Theme Park Revival · Private Server ▾";
+    public static final String TEXT = "Private Server  \u00b7  \ud83d\udc65 Friends & Codes";
 
     private static Activity activity;
 
@@ -27,11 +27,11 @@ public class Brand {
             activity = a;
             TextView t = new TextView(a);
             t.setText(TEXT);
-            t.setTextSize(11f);
+            t.setTextSize(14f);
             t.setTextColor(0xFFFFFFFF);
             t.setShadowLayer(3f, 1f, 1f, 0xFF000000);
-            t.setBackgroundColor(0x66000000);
-            t.setPadding(24, 4, 24, 8);
+            t.setBackgroundColor(0xDD1E88E5);
+            t.setPadding(36, 10, 36, 14);
             t.setClickable(true);
             t.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
@@ -57,6 +57,21 @@ public class Brand {
         });
     }
 
+    /** After login: on the first few starts, tell the player where friends are. */
+    public static void loggedIn() {
+        Net.async("tp/hello/", new Net.Done() {
+            public void done(String reply) {
+                if (Net.field(reply, "hint").equals("1")) {
+                    try {
+                        Thread.sleep(12000); // let the park finish loading
+                    } catch (InterruptedException e) {
+                    }
+                    toast("Tip: tap \"Friends & Codes\" at the top to add friends and use codes!");
+                }
+            }
+        });
+    }
+
     static void openMenu() {
         if (PMiPSP.GetMayhemSessionKey() == null) {
             toast("Not connected to the server yet.");
@@ -78,18 +93,30 @@ public class Brand {
     }
 
     static void showMenu(final String name, final String code) {
-        String[] items = {"Enter a promo code", "Add a friend", "My friends", "Change my name"};
+        String[] items = {
+                "\ud83d\udd11  My friend code: " + code + "  (tap for help)",
+                "\u2795  Add a friend (type their code)",
+                "\ud83d\udc65  My friends",
+                "\ud83c\udf81  Enter a promo code",
+                "\u270f\ufe0f  Change my name (" + name + ")"};
         new AlertDialog.Builder(activity)
-                .setTitle(name + "  ·  Friend code: " + code)
+                .setTitle("Friends & Codes")
                 .setItems(items, new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int which) {
                         if (which == 0) {
-                            ask("Promo code", "Type the code", "Redeem", "tp/redeem/");
+                            new AlertDialog.Builder(activity)
+                                    .setTitle("Your friend code: " + code)
+                                    .setMessage("Give this code to a friend. They open Friends & Codes, tap "
+                                            + "\"Add a friend\" and type it. Then you are friends!\n\n"
+                                            + "Restart the game and visit each other in Neighbor Parks "
+                                            + "(the people button at the bottom right).")
+                                    .setNegativeButton("OK", null).show();
                         } else if (which == 1) {
-                            ask("Add a friend", "Your friend's code (theirs, not " + code + ")",
-                                    "Add", "tp/addfriend/");
+                            ask("Add a friend", "Your friend's code, like ABC123", "Add", "tp/addfriend/");
                         } else if (which == 2) {
                             showFriends();
+                        } else if (which == 3) {
+                            ask("Promo code", "Type the code", "Redeem", "tp/redeem/");
                         } else {
                             ask("Change my name", name, "Save", "tp/name/");
                         }
