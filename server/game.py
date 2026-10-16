@@ -106,7 +106,8 @@ def roll_daily_bonus(user):
 def config_xml():
     def kv(name, value):
         return _xml_obj("ConfigKeyValue", {"configName": name, "configValue": value})
-    return (kv("DailyBonusCash", ",".join(map(str, DAILY_CASH))) +
+    return (kv("StartingGrindCurrency", START_CASH) +
+            kv("DailyBonusCash", ",".join(map(str, DAILY_CASH))) +
             kv("DailyBonusSuperTickets", ",".join(map(str, DAILY_TICKETS))))
 
 
@@ -177,6 +178,22 @@ def visit_user(other):
 PERSISTENT = ("friends", "name", "friendCode", "redeemed", "bonusDay", "bonusStreak")
 
 
+# Upgrade prices: the game shows and charges <upgradeCost> from these Entity
+# records. The built-in values are very low, so they are multiplied, except
+# for the items the tutorial makes you upgrade (fixed prices).
+UPGRADE_MULT = float(SETTINGS.get("upgradeCostMultiplier", 1))
+UPGRADE_FIXED = {str(k): int(v) for k, v in SETTINGS.get("upgradeCostFixed", {}).items()}
+START_CASH = int(SETTINGS.get("startCash", 100000))
+START_TICKETS = int(SETTINGS.get("startTickets", 10))
+
+
+def _tune_entity(e):
+    if "upgradeCost" in e and (UPGRADE_MULT != 1 or e["entityId"] in UPGRADE_FIXED):
+        e = dict(e)
+        e["upgradeCost"] = UPGRADE_FIXED.get(e["entityId"], int(round(e["upgradeCost"] * UPGRADE_MULT)))
+    return _easy_entity(e)
+
+
 def _easy_entity(e):
     """Easy mode: ticket-only items (price 0) get a cash price instead.
 
@@ -198,7 +215,7 @@ def _xml_obj(tag, obj):
 
 # Ride/shop/decoration definitions rebuilt from the client's own tables
 # (tools/catalog.py); EA's server sent these with every full park.
-CATALOG_XML = "".join(_xml_obj("Entity", {k: v for k, v in _easy_entity(e).items()
+CATALOG_XML = "".join(_xml_obj("Entity", {k: v for k, v in _tune_entity(e).items()
                                           if not k.startswith("_")})
                       for e in CATALOG)
 
@@ -219,7 +236,7 @@ NEW_USER = {
 # hasn't been started; it then calls startgame and sets up the tutorial itself.
 # Values follow the client's built-in defaults (StartingGrindCurrency,
 # TutorialTickets) since EA's originals are gone.
-NEW_PARK_USER = dict(NEW_USER, xpLevel=-1, cash=100000, superTickets=10,
+NEW_PARK_USER = dict(NEW_USER, xpLevel=-1, cash=START_CASH, superTickets=START_TICKETS,
                      unlockStates=0, musicVolume=100, sfxVolume=100,
                      parkOfficeString="-2,-2,-1,-2,-2,", scriptVariables="", userLastLvlUp=0,
                      friendInteractionDataString="")
