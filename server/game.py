@@ -8,10 +8,17 @@ fullpark/ rebuilds the XML the client loads (dk.progressivemedia.skeleton.h.ak).
 Cash/tickets/level/xp are not recomputed here: the patched client reports its own
 values in tp_* headers on every request (com.tprevival.State).
 """
+import datetime
 import json
 import os
+import random
 import time
 from urllib.parse import parse_qs, unquote
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # Python < 3.9
+    ZoneInfo = None
 
 BASE = "/mh/games/themepark/"
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "parks")
@@ -30,6 +37,117 @@ except (OSError, ValueError):
 EASY = bool(SETTINGS.get("easyMode"))
 EASY_CASH = int(SETTINGS.get("easyStartCash", 500000))
 EASY_TICKETS = int(SETTINGS.get("easyStartTickets", 100))
+
+# Promo codes: {"CODE": {"cash": n, "tickets": n}}, each usable once per player.
+PROMO_CODES = {k.upper(): v for k, v in SETTINGS.get("promoCodes", {}).items()}
+
+
+# ---- daily bonus -------------------------------------------------------------
+# The client has a 28-day calendar (dk.progressivemedia.skeleton.d.c.e). Each day
+# pays either cash or super tickets. These tables are sent to the client as
+# ConfigKeyValue DailyBonusCash / DailyBonusSuperTickets so the calendar shows
+# the same amounts the server pays. Index 0 is unused.
+def _daily_tables():
+    cash, tickets = [0], [0]
+    for week in range(4):
+        for day in range(7):
+            if day == 6:
+                cash.append(0)
+                tickets.append(week + 1)
+            else:
+                cash.append((500, 750, 1000, 1500, 2000, 2500)[day] * (week + 1))
+                tickets.append(0)
+    return cash, tickets
+
+
+DAILY_CASH, DAILY_TICKETS = _daily_tables()
+
+
+def _today():
+    tz = None
+    if ZoneInfo is not None:
+        try:
+            tz = ZoneInfo(SETTINGS.get("timezone", "Europe/Prague"))
+        except Exception:
+            tz = None
+    return datetime.datetime.now(tz).date().toordinal()
+
+
+def roll_daily_bonus(user):
+    """On the first login of a new day, queue that day's bonus.
+
+    The first bonus comes the day after the park was started; missing a day
+    restarts the streak (no ticket buy-back). The bonus stays pending until the
+    client says it was collected (tp/bonuscollected), so closing the game
+    before the popup does not lose it.
+    """
+    if user.get("xpLevel", 0) < 1:
+        return False
+    today = _today()
+    last = user.get("bonusDay")
+    if last is None:
+        user["bonusDay"] = today
+        user["bonusStreak"] = 0
+        return True
+    if last == today:
+        return False
+    # userDaysInARow is the streak before today: the popup highlights day
+    # streak + 1 of the calendar and the last calendar day is 28.
+    streak = user.get("bonusStreak", 0) + 1 if last == today - 1 else 1
+    if streak > 27:
+        streak = 1
+    user["bonusDay"] = today
+    user["bonusStreak"] = streak
+    user["bonusPending"] = {"day": streak, "cash": DAILY_CASH[streak + 1],
+                            "tickets": DAILY_TICKETS[streak + 1]}
+    return True
+
+
+def config_xml():
+    def kv(name, value):
+        return _xml_obj("ConfigKeyValue", {"configName": name, "configValue": value})
+    return (kv("DailyBonusCash", ",".join(map(str, DAILY_CASH))) +
+            kv("DailyBonusSuperTickets", ",".join(map(str, DAILY_TICKETS))))
+
+
+# ---- friends -------------------------------------------------------------------
+# Players add each other with a 6-character friend code (shown in the in-game
+# "Private Server" menu). Friendship is mutual and lets you visit the other
+# park and hire the friend as staff.
+CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def friend_code(user):
+    if not user.get("friendCode"):
+        taken = {u.get("friendCode") for u in all_users()}
+        while True:
+            code = "".join(random.choice(CODE_CHARS) for _ in range(6))
+            if code not in taken:
+                break
+        user["friendCode"] = code
+    return user["friendCode"]
+
+
+def all_users():
+    for name in os.listdir(DATA_DIR):
+        if name.endswith(".json"):
+            try:
+                with open(os.path.join(DATA_DIR, name)) as f:
+                    yield json.load(f)
+            except (OSError, ValueError):
+                continue
+
+
+def display_name(user):
+    return user.get("name") or "Player %s" % str(user.get("userId", ""))[-4:]
+
+
+def _xml_text(s):
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+# Kept when a player starts a new game (destroydata).
+PERSISTENT = ("friends", "name", "friendCode", "redeemed", "bonusDay", "bonusStreak")
 
 
 def _easy_entity(e):
@@ -178,9 +296,21 @@ def give_easy_bonus(user):
     return True
 
 
-def themeuser_xml(user):
+def themeuser_xml(user, own=False):
+    """own=True adds a pending daily bonus: the client shows the bonus popup and
+    subtracts dailyBonusCash/SuperTickets from cash/superTickets until it is
+    collected (skeleton.d.d.a(ak)), so they are added on top here."""
+    vals = dict(user)
+    vals.update(dailyBonusCash=0, dailyBonusSuperTickets=0, dailyBonusVoucher=-1,
+                userDaysInARow=0)
+    bonus = user.get("bonusPending") if own else None
+    if bonus:
+        vals["cash"] = user.get("cash", 0) + bonus["cash"]
+        vals["superTickets"] = user.get("superTickets", 0) + bonus["tickets"]
+        vals.update(dailyBonusCash=bonus["cash"], dailyBonusSuperTickets=bonus["tickets"],
+                    userDaysInARow=bonus["day"])
     return "<ThemeUser>%s</ThemeUser>" % "".join(
-        "<%s>%s</%s>" % (k, user.get(k, ""), k) for k in THEMEUSER_FIELDS if k in user)
+        "<%s>%s</%s>" % (k, vals.get(k, ""), k) for k in THEMEUSER_FIELDS if k in vals)
 
 
 # ---- world instances (rides, shops, decorations) -------------------------------
@@ -225,7 +355,7 @@ def worldinstance_xml(wi, now):
 def fullpark_xml(user):
     now = time.time()
     park = user["park"]
-    parts = [CATALOG_XML]
+    parts = [CATALOG_XML, config_xml()]
     for wi in park["WorldInstance"].values():
         parts.append(worldinstance_xml(wi, now))
     for q in park["Quest"].values():
@@ -295,7 +425,10 @@ def handle(method, path, query, headers, body):
     now = time.time()
     ok = (200, "<Resources></Resources>")
 
-    dirty = apply_reported_state(user, headers)
+    # Park loads can carry stale numbers (e.g. a friend's cash right after a
+    # visit), so only other requests update cash/tickets/level/xp.
+    dirty = False if seg[0] in ("themeuser", "fullpark", "destroydata", "startgame") \
+        else apply_reported_state(user, headers)
 
     def done():
         save_user(mid, user)
@@ -310,20 +443,29 @@ def handle(method, path, query, headers, body):
     # themeuser/<mayhemId>: does a park exist? themeuser/: the logged-in user.
     if seg[0] == "themeuser":
         arg = seg[1] if len(seg) > 1 else ""
-        if arg:
+        if arg and arg != mid:
+            # another player's park: friends only
+            if arg not in user.get("friends", []):
+                return 200, "<Resources></Resources>"
             other = load_user(arg)
             if other.get("xpLevel", 0) > 0:
                 return 200, "<Resources>%s</Resources>" % themeuser_xml(other)
             return 200, "<Resources></Resources>"
+        if arg:
+            if user.get("xpLevel", 0) > 0:
+                return 200, "<Resources>%s</Resources>" % themeuser_xml(user, own=True)
+            return 200, "<Resources></Resources>"
         user["userLastLogin"] = int(now)
         give_easy_bonus(user)
+        roll_daily_bonus(user)
         if user.get("xpLevel", 0) != 0:
             save_user(mid, user)
-        return 200, themeuser_xml(user)
+        return 200, themeuser_xml(user, own=True)
 
     # Wipes the player's park before a new game starts.
     if seg[0] == "destroydata":
-        user = dict(NEW_PARK_USER)
+        keep = {k: user[k] for k in PERSISTENT if k in user}
+        user = dict(NEW_PARK_USER, **keep)
         user["themeUserId"] = mid
         user["userId"] = mid
         user["userLastLogin"] = int(now)
@@ -343,9 +485,19 @@ def handle(method, path, query, headers, body):
         return 200, "<ImageData><imageName>%s</imageName><version>-2</version></ImageData>" % seg[-1]
 
     if seg[0] == "fullpark":
+        other = seg[1] if len(seg) > 1 else "x"
+        if other not in ("x", mid):
+            # visiting a friend's park (skeleton.h.al)
+            if other not in user.get("friends", []):
+                return 200, "<error code=\"403\" type=\"NOT_FRIENDS\" field=\"fullpark\"/>"
+            return 200, fullpark_xml(load_user(other))
         if dirty:
             save_user(mid, user)
         return 200, fullpark_xml(user)
+
+    # ---- revival extras (com.tprevival.* in the patched client) -------------------
+    if seg[0] == "tp":
+        return handle_tp(mid, user, seg[1:], dirty)
 
     # ---- profile ----------------------------------------------------------------
     if seg[0] == "setparkoffice" and len(seg) > 1:
@@ -506,6 +658,81 @@ def handle(method, path, query, headers, body):
     if dirty:
         save_user(mid, user)
     return ok
+
+
+def _result(ok, message, **extra):
+    fields = {"ok": 1 if ok else 0, "message": _xml_text(message)}
+    fields.update(extra)
+    return 200, _xml_obj("Result", fields)
+
+
+def handle_tp(mid, user, seg, dirty):
+    cmd = seg[0] if seg else ""
+    if cmd == "me":
+        code = friend_code(user)
+        save_user(mid, user)
+        return 200, _xml_obj("Me", {"id": mid, "code": code, "name": _xml_text(display_name(user))})
+    if cmd == "name" and len(seg) > 1:
+        name = "".join(c for c in seg[1] if c.isprintable() and c not in "<>&")[:20].strip()
+        if not name:
+            return _result(False, "Name can't be empty.")
+        user["name"] = name
+        save_user(mid, user)
+        return _result(True, "Name set to %s." % name)
+    if cmd == "friends":
+        out = []
+        for fid in user.get("friends", []):
+            f = load_user(fid)
+            out.append(_xml_obj("Friend", {"mayhemId": fid, "name": _xml_text(display_name(f)),
+                                           "level": f.get("xpLevel", 0)}))
+        if dirty:
+            save_user(mid, user)
+        return 200, "<Friends>%s</Friends>" % "".join(out)
+    if cmd == "addfriend" and len(seg) > 1:
+        code = seg[1].strip().upper()
+        if code == user.get("friendCode"):
+            return _result(False, "That is your own code.")
+        other = next((u for u in all_users() if u.get("friendCode") == code), None)
+        if other is None:
+            return _result(False, "No player has the code %s." % _xml_text(code))
+        oid = str(other["userId"])
+        if oid in user.get("friends", []):
+            return _result(False, "%s is already your friend." % display_name(other))
+        other = load_user(oid)
+        user.setdefault("friends", []).append(oid)
+        other.setdefault("friends", [])
+        if mid not in other["friends"]:
+            other["friends"].append(mid)
+        save_user(mid, user)
+        save_user(oid, other)
+        return _result(True, "%s is now your friend!" % display_name(other))
+    if cmd == "removefriend" and len(seg) > 1:
+        oid = seg[1]
+        if oid in user.get("friends", []):
+            user["friends"].remove(oid)
+            other = load_user(oid)
+            if mid in other.get("friends", []):
+                other["friends"].remove(mid)
+                save_user(oid, other)
+            save_user(mid, user)
+        return _result(True, "Friend removed.")
+    if cmd == "redeem" and len(seg) > 1:
+        code = seg[1].strip().upper()
+        reward = PROMO_CODES.get(code)
+        if reward is None:
+            return _result(False, "Unknown code.")
+        if code in user.get("redeemed", []):
+            return _result(False, "You already used this code.")
+        user.setdefault("redeemed", []).append(code)
+        save_user(mid, user)
+        cash, tickets = int(reward.get("cash", 0)), int(reward.get("tickets", 0))
+        return _result(True, "Code redeemed: $%d and %d super tickets!" % (cash, tickets),
+                       cash=cash, tickets=tickets)
+    if cmd == "bonuscollected":
+        if user.pop("bonusPending", None) is not None or dirty:
+            save_user(mid, user)
+        return _result(True, "")
+    return _result(False, "Unknown request.")
 
 
 def log_action(mid, method, rest, body):

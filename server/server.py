@@ -7,6 +7,7 @@ every request it sees so the remaining game endpoints can be filled in.
 import json
 import os
 import sys
+import threading
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -42,6 +43,16 @@ def save_state():
 
 
 STATE = load_state()
+# Sessions from before device-checked logins (v1) are no longer accepted.
+STATE.pop("sessions", None)
+STATE.setdefault("sessions2", {})
+
+MAX_BODY = 512 * 1024
+MAX_LOG = 20 * 1024 * 1024
+# One request at a time touches the park files.
+GAME_LOCK = threading.Lock()
+# Game paths that are fine without a login.
+PUBLIC_GAME = ("serverload/", "checkversionandroid/", "locale/")
 
 
 def director():
@@ -83,8 +94,20 @@ def new_uid():
     return uid
 
 
+def known_uid(app_uid):
+    """True if app_uid was handed out by getAnonUid to some device."""
+    return any(str(d.get("uid")) == str(app_uid) for d in STATE["devices"].values())
+
+
+def session_ok(headers):
+    mid = headers.get("mh_uid") or ""
+    sess = STATE["sessions2"].get(headers.get("mh_session_key") or "")
+    return bool(mid) and sess is not None and sess.get("mid") == mid
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+    timeout = 30
 
     def log_message(self, fmt, *args):
         pass
@@ -93,8 +116,15 @@ class Handler(BaseHTTPRequestHandler):
         line = "%s %s %s %s" % (time.strftime("%H:%M:%S"), self.command, self.path,
                                 body[:2000].decode("utf-8", "replace") if body else "")
         if "/mh/" in self.path:
-            line += "\n   headers: " + repr(dict(self.headers))
+            hdr = {k: v for k, v in self.headers.items()
+                   if k.lower() in ("mh_uid", "tp_cash", "tp_tickets", "tp_level", "tp_xp", "user-agent")}
+            line += "\n   headers: " + repr(hdr)
         print(line, flush=True)
+        try:
+            if os.path.getsize(LOG_FILE) > MAX_LOG:
+                os.replace(LOG_FILE, LOG_FILE + ".1")
+        except OSError:
+            pass
         with open(LOG_FILE, "a") as f:
             f.write(line + "\n")
 
@@ -115,15 +145,24 @@ class Handler(BaseHTTPRequestHandler):
                    "application/xml")
 
     def handle_any(self):
-        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = -1
+        if length < 0 or length > MAX_BODY:
+            self.close_connection = True
+            return self.xml("<error code=\"413\" type=\"TOO_LARGE\" field=\"body\"/>", 413)
         body = self.rfile.read(length) if length else b""
         self._log(body)
         url = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(url.query).items()}
         path = url.path
 
-        res = game.handle(self.command, path, q, self.headers, body)
-        if res is not None:
+        if path.startswith(game.BASE):
+            if not path[len(game.BASE):].startswith(PUBLIC_GAME) and not session_ok(self.headers):
+                return self.xml("<error code=\"401\" type=\"BAD_SESSION\" field=\"mh_session_key\"/>", 401)
+            with GAME_LOCK:
+                res = game.handle(self.command, path, q, self.headers, body)
             return self.xml(res[1], res[0])
 
         if path.endswith("/director/api/android/getDirectionByPackage"):
@@ -161,6 +200,8 @@ class Handler(BaseHTTPRequestHandler):
         # Mayhem login: create/lookup a Mayhem user for an application user id.
         if path.rstrip("/").endswith("/mh/users"):
             app_uid = q.get("applicationUserId", "anon")
+            if not known_uid(app_uid):
+                return self.xml("<error code=\"404\" type=\"NO_SUCH_USER\" field=\"applicationUserId\"/>", 404)
             mid = STATE["mayhem"].get(app_uid)
             if not mid:
                 mid = str(new_uid())
@@ -178,6 +219,8 @@ class Handler(BaseHTTPRequestHandler):
             ids = [i for i in (form.get("applicationUserIds") or q.get("applicationUserIds", "")).split(",") if i]
             out = []
             for app_uid in ids:
+                if not known_uid(app_uid):
+                    continue
                 mid = STATE["mayhem"].get(app_uid)
                 if not mid:
                     mid = str(new_uid())
@@ -190,8 +233,16 @@ class Handler(BaseHTTPRequestHandler):
 
         if "/mh/users/" in path and path.rstrip("/").endswith("/token"):
             mid = path.rstrip("/").split("/")[-2]
+            # Only the device that owns this player gets a session: the client
+            # proves it with the eadeviceid getDeviceID gave it.
+            dev = STATE["devices"].get(q.get("eadeviceid") or "")
+            if not dev or STATE["mayhem"].get(str(dev.get("uid"))) != mid:
+                return self.xml("<error code=\"403\" type=\"NOT_YOUR_USER\" field=\"token\"/>", 403)
             key = uuid.uuid4().hex
-            STATE.setdefault("sessions", {})[key] = mid
+            sessions = STATE["sessions2"]
+            for old in [k for k, v in sessions.items() if v.get("mid") == mid]:
+                del sessions[old]
+            sessions[key] = {"mid": mid, "t": int(time.time())}
             save_state()
             # expirationDate is a duration, "days:hours:minutes:seconds".
             return self.xml("<Token><sessionKey>%s</sessionKey>"

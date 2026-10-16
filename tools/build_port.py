@@ -27,7 +27,7 @@ KEYSTORE = os.path.join(HERE, "themepark.keystore")
 NATIVE_LIBS = ("EASPFullExample", "rflib", "AudioLib")
 REPLACED = ["dk/progressivemedia/android/PMGraphics", "dk/progressivemedia/android/PMAudioAPI",
             "dk/progressivemedia/android/ipsp/PMiPSP", "com/tprevival/Safe", "com/tprevival/State",
-            "com/tprevival/Brand"]
+            "com/tprevival/Brand", "com/tprevival/Net", "com/tprevival/Friends"]
 
 
 def run(*cmd, **kw):
@@ -131,6 +131,46 @@ def main():
     s = open(p, encoding="utf-8").read()
     s = sub_once(s, r"(:cond_0\n\s*)const/4 v0, 0x0(\n\s*iput-boolean v0, p0, "
                     r"Ldk/progressivemedia/skeleton/d/b/n;->k:Z)", r"\1const/4 v0, 0x1\2", "open ride plots")
+    open(p, "w", encoding="utf-8").write(s)
+
+    # friends come from the revival server (com.tprevival.Friends) instead of
+    # the made-up "Friend 1..n" list this build's GetFriends() produced
+    p = os.path.join(smali, "dk", "progressivemedia", "skeleton", "ipsp", "PMiPSP.smali")
+    s = open(p, encoding="utf-8").read()
+    s = sub_once(s, r"(\.method public static GetFriends\(\)V\n)(?:.*\n)*?(\.end method)",
+                 r"\1    .locals 0\n\n    invoke-static {}, Lcom/tprevival/Friends;->fetch()V\n\n    return-void\n\2",
+                 "GetFriends")
+    open(p, "w", encoding="utf-8").write(s)
+
+    # friend screens think this is an Origin account (com.tprevival.Friends.accountState)
+    state_call = "invoke-static {}, Ldk/progressivemedia/skeleton/d/f;->r()I"
+    for name in ("s", "b"):  # Neighbor Parks, hire a friend
+        p = os.path.join(smali, "dk", "progressivemedia", "skeleton", "d", "c", "b", name + ".smali")
+        s = open(p, encoding="utf-8").read()
+        if state_call not in s:
+            sys.exit("build_port: no account state check in d/c/b/%s.smali" % name)
+        s = s.replace(state_call, "invoke-static {}, Lcom/tprevival/Friends;->accountState()I")
+        open(p, "w", encoding="utf-8").write(s)
+    p = os.path.join(smali, "dk", "progressivemedia", "skeleton", "d", "f.smali")
+    s = open(p, encoding="utf-8").read()
+    s = sub_once(s, r"(\.method public static i\(\)I\n(?:(?!\.end method).*\n)*?\s*)"
+                    r"invoke-static \{\}, Ldk/progressivemedia/skeleton/ipsp/PMiPSP;->getAccountState\(\)I",
+                 r"\1invoke-static {}, Lcom/tprevival/Friends;->accountState()I", "friend count")
+    open(p, "w", encoding="utf-8").write(s)
+
+    # mark when our own park's cash/tickets are loaded (com.tprevival.State.parkLoaded)
+    p = os.path.join(smali, "dk", "progressivemedia", "skeleton", "d", "d.smali")
+    s = open(p, encoding="utf-8").read()
+    s = sub_once(s, r"(\.method public static a\(Ldk/progressivemedia/skeleton/h/ak;\)V\n(?:(?!\.end method).*\n)*?"
+                    r"\s*sput v0, Ldk/progressivemedia/skeleton/d/d;->z:I\n)",
+                 r"\1\n    invoke-static {}, Lcom/tprevival/State;->parkLoaded()V\n", "park loaded")
+    open(p, "w", encoding="utf-8").write(s)
+
+    # tell the server when the daily bonus popup was collected (com.tprevival.Net)
+    p = os.path.join(smali, "dk", "progressivemedia", "skeleton", "d", "c", "e.smali")
+    s = open(p, encoding="utf-8").read()
+    s = sub_once(s, r"(sput-boolean v4, Ldk/progressivemedia/skeleton/f;->P:Z\n)",
+                 r"\1\n    invoke-static {}, Lcom/tprevival/Net;->bonusCollected()V\n", "daily bonus collect")
     open(p, "w", encoding="utf-8").write(s)
 
     # every park request reports the player's cash/tickets/level/xp (com.tprevival.State)

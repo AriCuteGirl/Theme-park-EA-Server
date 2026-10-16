@@ -31,6 +31,7 @@ public class PMiPSP {
     private static final int EV_MAYHEM_IDS_DONE = 60;
 
     private static final ArrayList<int[]> events = new ArrayList<int[]>();
+    private static final ArrayList<Runnable> gameTasks = new ArrayList<Runnable>();
     private static volatile boolean loggedIn = false;
     private static volatile boolean loggingIn = false;
     private static volatile String mayhemUserId = null;
@@ -40,6 +41,13 @@ public class PMiPSP {
     private static void post(int id, int request, int value) {
         synchronized (events) {
             events.add(new int[]{id, request, value});
+        }
+    }
+
+    /** Run r on the game thread (next onUpdate tick). */
+    public static void runOnGame(Runnable r) {
+        synchronized (gameTasks) {
+            gameTasks.add(r);
         }
     }
 
@@ -104,7 +112,8 @@ public class PMiPSP {
                             "\"uid\"\\s*:\\s*\"?(\\d+)");
                     String mid = find(get("/mh/users?application=synergy&applicationUserId=" + uid),
                             "/users/(\\d+)");
-                    String key = find(get("/mh/users/" + mid + "/token?game=themepark"),
+                    // the device id proves to the server that this player is ours
+                    String key = find(get("/mh/users/" + mid + "/token?game=themepark&eadeviceid=" + enc(dev)),
                             "<sessionKey>([^<]+)</sessionKey>");
                     mayhemUserId = mid;
                     sessionKey = key;
@@ -187,6 +196,22 @@ public class PMiPSP {
 
     /** Called every frame by the game: deliver queued SDK events on its thread. */
     public static void onUpdate() {
+        Runnable[] tasks = null;
+        synchronized (gameTasks) {
+            if (!gameTasks.isEmpty()) {
+                tasks = gameTasks.toArray(new Runnable[gameTasks.size()]);
+                gameTasks.clear();
+            }
+        }
+        if (tasks != null) {
+            for (Runnable r : tasks) {
+                try {
+                    r.run();
+                } catch (Throwable t) {
+                    Log.e(TAG, "game task failed: " + t);
+                }
+            }
+        }
         int[][] pending;
         synchronized (events) {
             if (events.isEmpty()) {

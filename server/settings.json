@@ -2,5 +2,12 @@
  "easyMode": false,
  "easyStartCash": 500000,
  "easyStartTickets": 100,
- "easyTicketToCash": 5
+ "easyTicketToCash": 5,
+ "timezone": "Europe/Prague",
+ "promoCodes": {
+  "REVIVAL": {
+   "cash": 10000,
+   "tickets": 5
+  }
+ }
 }
