@@ -485,8 +485,10 @@ def handle(method, path, query, headers, body):
             wi["slotId"] = _int(seg[1], wi.get("slotId", -1))
         return done()
     if seg[0] == "timers" and len(seg) >= 4:
-        wi = wis.get(seg[3])
-        if wi:
+        # timers/<pause|resume>/worldinstance/<localId|all>/ (the tutorial uses "all")
+        targets = [w for w in wis.values() if w.get("objectState") == 4] if seg[3] == "all" \
+            else [wis[seg[3]]] if seg[3] in wis else []
+        for wi in targets:
             if seg[1] == "pause" and wi.get("pausedNurture") is None:
                 wi["pausedNurture"] = max(0, wi.get("nurtureEnd", now) - now)
             elif seg[1] == "resume" and wi.get("pausedNurture") is not None:
