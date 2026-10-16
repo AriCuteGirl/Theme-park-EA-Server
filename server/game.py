@@ -21,6 +21,31 @@ with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "catalog.json
     CATALOG = json.load(_f)
 ENTITIES = {e["entityId"]: e for e in CATALOG}
 
+# server/settings.json: easy mode switch (edit it, then redeploy).
+try:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")) as _f:
+        SETTINGS = json.load(_f)
+except (OSError, ValueError):
+    SETTINGS = {}
+EASY = bool(SETTINGS.get("easyMode"))
+EASY_CASH = int(SETTINGS.get("easyStartCash", 500000))
+EASY_TICKETS = int(SETTINGS.get("easyStartTickets", 100))
+
+
+def _easy_entity(e):
+    """Easy mode: ticket-only items (price 0) get a cash price instead.
+
+    The client treats an item as ticket-only when its cash price is 0
+    (dk.progressivemedia.skeleton.c.a.b.e()). Cash items sell for about 1/5 of
+    their price, so sellPrice * easyTicketToCash gives a matching cash price.
+    """
+    if not EASY or e.get("price", 0) > 0 or e.get("priceSuperTickets", 0) <= 0:
+        return e
+    e = dict(e)
+    e["price"] = max(100, int(e.get("sellPrice", 0)) * int(SETTINGS.get("easyTicketToCash", 5)))
+    e["priceSuperTickets"] = 0
+    return e
+
 
 def _xml_obj(tag, obj):
     return "<%s>%s</%s>" % (tag, "".join("<%s>%s</%s>" % (k, v, k) for k, v in obj.items()), tag)
@@ -28,7 +53,8 @@ def _xml_obj(tag, obj):
 
 # Ride/shop/decoration definitions rebuilt from the client's own tables
 # (tools/catalog.py); EA's server sent these with every full park.
-CATALOG_XML = "".join(_xml_obj("Entity", {k: v for k, v in e.items() if not k.startswith("_")})
+CATALOG_XML = "".join(_xml_obj("Entity", {k: v for k, v in _easy_entity(e).items()
+                                          if not k.startswith("_")})
                       for e in CATALOG)
 
 NEW_USER = {
@@ -62,6 +88,32 @@ THEMEUSER_FIELDS = ["themeUserId", "userId", "xpLevel", "xpProgress", "cash", "s
 # unlockStates bits as read by the client (ak.java / d.d): unlock/<name> -> bit
 UNLOCK_BITS = {"microactions": 1, "upgrades": 2, "parkoffice": 4, "sell": 8}
 
+# Tutorial scripts lock/unlock the build menus by plot size:
+# unlock/<l|u><ridemenu|shopmenu><all|small|medium|large>/themeuser/ ("l" locks).
+# Bits as set by script ops 62/63 (skeleton.g.a) and read back in ak.java.
+MENU_BITS = {
+    "ridemenu": {"small": 512, "medium": 4194304, "large": 16777216},
+    "shopmenu": {"small": 256, "medium": 2097152, "large": 8388608},
+}
+for _sizes in MENU_BITS.values():
+    _sizes["all"] = sum(_sizes.values())
+
+
+def menu_lock_bits(name):
+    """'lshopmenuall' -> (True, 10486016); None if not a menu lock name."""
+    if len(name) < 2 or name[0] not in "lu":
+        return None
+    for menu, sizes in MENU_BITS.items():
+        if name[1:].startswith(menu) and name[1 + len(menu):] in sizes:
+            return name[0] == "l", sizes[name[1 + len(menu):]]
+    return None
+
+
+# Actions whose effect lives only in the client (cash/tickets/xp arrive via the
+# tp_* headers anyway), so a plain OK is the whole reply.
+STATELESS = {"gesture", "emptytrash", "cleanuppuke", "incrementgametime", "xpprogress",
+             "cash", "supertickets", "sentinvite", "tapjoy", "getallfreepurchases"}
+
 # Territory 25 is the starting area (the only one with no unlock condition in
 # the client's themeSlots table).
 START_TERRITORY = 25
@@ -73,7 +125,8 @@ def _path(mid):
 
 def empty_park():
     return {"WorldInstance": {}, "Quest": {}, "EntityLicense": {}, "SavedScript": [],
-            "StaffMember": {}, "ThemeStatue": {}, "SlotLicense": {}, "OneTimePurchase": {}}
+            "StaffMember": {}, "ThemeStatue": {}, "SlotLicense": {}, "OneTimePurchase": {},
+            "AttractionVoucher": []}
 
 
 def load_user(mid):
@@ -108,6 +161,21 @@ def save_user(mid, user):
     with open(tmp, "w") as f:
         json.dump(user, f, indent=1)
     os.replace(tmp, _path(mid))
+
+
+def give_easy_bonus(user):
+    """Easy mode: raise a park's cash/tickets once to the easy starting amounts.
+
+    The client takes cash and tickets from the ThemeUser reply when it loads
+    the park (dk.progressivemedia.skeleton.d.d.a(ak)), so this reaches new and
+    existing parks alike.
+    """
+    if not EASY or user.get("easyBonus") or user.get("xpLevel", 0) < 1:
+        return False
+    user["cash"] = max(user.get("cash", 0), EASY_CASH)
+    user["superTickets"] = max(user.get("superTickets", 0), EASY_TICKETS)
+    user["easyBonus"] = 1
+    return True
 
 
 def themeuser_xml(user):
@@ -174,6 +242,8 @@ def fullpark_xml(user):
         parts.append(_xml_obj("SlotLicense", sl))
     for otp in park["OneTimePurchase"].values():
         parts.append(_xml_obj("OneTimePurchase", otp))
+    for idx in park["AttractionVoucher"]:
+        parts.append(_xml_obj("AttractionVoucher", {"attractionIndex": idx}))
     return "<Resources>%s</Resources>" % "".join(parts)
 
 
@@ -246,6 +316,7 @@ def handle(method, path, query, headers, body):
                 return 200, "<Resources>%s</Resources>" % themeuser_xml(other)
             return 200, "<Resources></Resources>"
         user["userLastLogin"] = int(now)
+        give_easy_bonus(user)
         if user.get("xpLevel", 0) != 0:
             save_user(mid, user)
         return 200, themeuser_xml(user)
@@ -289,6 +360,15 @@ def handle(method, path, query, headers, body):
     if seg[0] == "unlock" and len(seg) > 1 and seg[1] in UNLOCK_BITS:
         user["unlockStates"] = user.get("unlockStates", 0) | UNLOCK_BITS[seg[1]]
         return done()
+    if seg[0] == "unlock" and len(seg) > 1 and menu_lock_bits(seg[1]):
+        lock, bits = menu_lock_bits(seg[1])
+        states = user.get("unlockStates", 0)
+        user["unlockStates"] = states | bits if lock else states & ~bits
+        return done()
+    if seg[0] in STATELESS:
+        if dirty:
+            save_user(mid, user)
+        return ok
     if seg[0] == "setfriendinteraction":
         user["friendInteractionDataString"] = text
         return done()
@@ -360,6 +440,10 @@ def handle(method, path, query, headers, body):
                         "instanceType": _int(form.get("instanceType")), "entityId": eid,
                         "objectState": 1, "upgradeLevel": 0, "nurtureClicks": 0,
                         "buildEnd": now + _entity_secs(eid, "buildTimeInSeconds")}
+            # building with a voucher uses up one voucher for that attraction
+            idx = ENTITIES.get(eid, {}).get("index")
+            if form.get("usingvoucher") == "true" and idx in park["AttractionVoucher"]:
+                park["AttractionVoucher"].remove(idx)
         elif lid in wis and seg[1] == "finish":       # skipped with tickets
             wis[lid]["buildEnd"] = now
             wis[lid]["objectState"] = 2
