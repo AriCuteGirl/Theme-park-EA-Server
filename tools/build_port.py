@@ -26,7 +26,8 @@ APKTOOL = os.environ.get("APKTOOL", os.path.join(HERE, "apktool.jar"))
 KEYSTORE = os.path.join(HERE, "themepark.keystore")
 NATIVE_LIBS = ("EASPFullExample", "rflib", "AudioLib")
 REPLACED = ["dk/progressivemedia/android/PMGraphics", "dk/progressivemedia/android/PMAudioAPI",
-            "dk/progressivemedia/android/ipsp/PMiPSP", "com/tprevival/Safe", "com/tprevival/State"]
+            "dk/progressivemedia/android/ipsp/PMiPSP", "com/tprevival/Safe", "com/tprevival/State",
+            "com/tprevival/Brand"]
 
 
 def run(*cmd, **kw):
@@ -150,6 +151,9 @@ def main():
     s = sub_once(s, r"^\s*new-instance (v\d+), Lcom/ea/easp/EASPHandler;\n(?:.*\n)*?"
                     r"\s*invoke-virtual \{\1, v\d+\}, Lcom/ea/easp/EASPHandler;->onCreate\(Landroid/os/Bundle;\)V\n",
                  "", "EASPHandler start-up")
+    # "Private Server" label over the game view (com.tprevival.Brand)
+    s = sub_once(s, r"(invoke-virtual \{p0, (v\d+)\}, Ldk/progressivemedia/android/PMActivity;->setContentView\(Landroid/view/View;\)V\n)",
+                 r"\1\n    invoke-static {p0}, Lcom/tprevival/Brand;->attach(Landroid/app/Activity;)V\n", "setContentView")
     open(p, "w", encoding="utf-8").write(s)
 
     # 4. no lib/, game data inside the APK (PMActivity prefers assets/0.bfc over the OBB)

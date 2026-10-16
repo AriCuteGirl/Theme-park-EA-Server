@@ -1,5 +1,5 @@
 {
- "easyMode": true,
+ "easyMode": false,
  "easyStartCash": 500000,
  "easyStartTickets": 100,
  "easyTicketToCash": 5
