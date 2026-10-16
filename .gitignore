@@ -3,3 +3,4 @@ __pycache__/
 server/data/
 tools/apktool*.jar
 *.keystore
+deploy/deploy.env

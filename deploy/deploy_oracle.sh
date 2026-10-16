@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# Deploy the Theme Park server to the Oracle VM and run it as a systemd service.
-# Run from the project folder:  bash deploy/deploy_oracle.sh
+# Deploy the Theme Park server to an Ubuntu VM (e.g. Oracle Cloud free tier) and
+# run it as a systemd service:  bash deploy/deploy_oracle.sh
 # Re-running it updates the code; saved parks in ~/themepark-server/data are kept.
+#
+# Settings come from deploy/deploy.env (not in git, see deploy.env.example) or
+# the environment: TP_HOST (user@ip), TP_KEY (ssh key), TP_PUBLIC (http://ip:8086).
 set -euo pipefail
 
-HOST="${TP_HOST:-ubuntu@130.162.243.144}"
-KEY="${TP_KEY:-$HOME/.ssh/oracle_pupberg}"
-PUBLIC_URL="${TP_PUBLIC:-http://130.162.243.144:8086}"
+ENV_FILE="$(dirname "$0")/deploy.env"
+[ -f "$ENV_FILE" ] && . "$ENV_FILE"
+HOST="${TP_HOST:?set TP_HOST, e.g. ubuntu@1.2.3.4 (see deploy/deploy.env.example)}"
+KEY="${TP_KEY:-$HOME/.ssh/id_ed25519}"
+PUBLIC_URL="${TP_PUBLIC:-http://${HOST#*@}:8086}"
 SSH=(/usr/bin/ssh -i "$KEY" -o StrictHostKeyChecking=accept-new)
 
 cd "$(dirname "$0")/.."

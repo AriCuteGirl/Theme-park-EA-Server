@@ -222,6 +222,11 @@ def main():
     aligned = os.path.join(work, "aligned.apk")
     run("java", "-jar", APKTOOL, "b", "-o", unsigned, dec)
     run("zipalign", "-f", "-p", "4", unsigned, aligned)
+    if not os.path.exists(KEYSTORE):
+        # your own signing key; keep it to install updates over your builds
+        run("keytool", "-genkeypair", "-keystore", KEYSTORE, "-alias", "tp", "-keyalg", "RSA",
+            "-keysize", "2048", "-validity", "10000", "-storepass", "themepark",
+            "-keypass", "themepark", "-dname", "CN=Theme Park Revival")
     run("apksigner", "sign", "--ks", KEYSTORE, "--ks-pass", "pass:themepark", "--out", out_apk, aligned)
     shutil.rmtree(work)
     print("wrote", out_apk)
