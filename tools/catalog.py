@@ -92,6 +92,12 @@ def main():
 
     ents = []
 
+    # The client reads isHidden backwards from its name: 1, 3 or 5 means the
+    # item is listed in the build menu, anything else hides it
+    # (dk.progressivemedia.skeleton.h.f -> bc.H, used as R = !H).
+    def visible(flag):
+        return 1 if flag == 1 else 0
+
     def base(etype, o):
         return {"entityType": etype, "entityId": str(etype * 1000 + o["t"]), "index": o["t"],
                 "price": o["price"], "priceSuperTickets": o["st"]}
@@ -106,7 +112,7 @@ def main():
                  earningsPerCollect=csv(o["c"]), parkRankPerCollect=csv(o["d"]),
                  visitorsServed=o["j"], visitorsServedUpgradeEffect=o["k"],
                  timeTillPayoutInSeconds=o["m"], perfectGestureReward=o["ad"],
-                 isHidden=0 if o["R"] == 1 else 1, sortOrder=o["N"], gesture=o["ac"],
+                 isHidden=visible(o["R"]), sortOrder=o["N"], gesture=o["ac"],
                  _name=o["u"], _desc=o["v"], _instanceType=o["K"])
         ents.append(e)
     for o in shops:
@@ -119,7 +125,7 @@ def main():
                  visitorsServedUpgradeEffect=o["k"], nurtureClicks=o["l"],
                  timeTillPayoutInSeconds=o["m"], entranceDirection=o["b"], type=o["T"],
                  entrance="%d,%d" % (o["ax"], o["ay"]), sellPrice=o["B"], unlockLevel=o["I"],
-                 isHidden=0 if o["R"] == 1 else 1, sortOrder=o["N"],
+                 isHidden=visible(o["R"]), sortOrder=o["N"],
                  _name=o["u"], _desc=o["v"], _instanceType=o["K"])
         ents.append(e)
     for o in typ9:
@@ -128,7 +134,7 @@ def main():
         ents.append(e)
     for o in typ27:
         e = base(27, o)
-        e.update(unlockCost=o["C"], isHidden=0 if o["b"] == 1 else 1, _name=o["u"],
+        e.update(unlockCost=o["C"], isHidden=visible(o["b"]), _name=o["u"],
                  _desc=o["v"], _instanceType=o["K"])
         ents.append(e)
     for o in typ14:
@@ -137,7 +143,7 @@ def main():
                  entrance="%d,%d" % (o["ax"], o["ay"]), entranceDirection=o["b"],
                  profiteeringSkipCost=o["S"], nurtureClicks=o["T"],
                  timeTillPayoutInSeconds=o["m"], earningsPerCollect=csv(o["c"]),
-                 upgradeSkipCost=o["Y"], sellPrice=o["B"], isHidden=0 if o["R"] == 1 else 1,
+                 upgradeSkipCost=o["Y"], sellPrice=o["B"], isHidden=visible(o["R"]),
                  unlockLevel=o["I"], unlockCost=o["C"], sortOrder=o["N"],
                  _name=o["u"], _desc=o["v"], _instanceType=o["K"])
         ents.append(e)
