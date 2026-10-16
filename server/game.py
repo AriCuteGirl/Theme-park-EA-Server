@@ -146,6 +146,33 @@ def _xml_text(s):
     return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
+# The "Advisor" in Neighbor Parks is player 0, a park EA's server provided.
+# Ours is a small showcase: the start area with a Bouncy Castle on the
+# tutorial plot (slot 14289). Visiting it counts for "Visit park advisor".
+ADVISOR_ID = "0"
+
+
+def advisor_user():
+    user = dict(NEW_PARK_USER, themeUserId=ADVISOR_ID, userId=ADVISOR_ID, xpLevel=10,
+                cash=0, superTickets=0, name="Advisor")
+    park = empty_park()
+    park["SlotLicense"]["1:%d" % START_TERRITORY] = {
+        "isThemeSlot": 1, "isTaken": 0, "localSlotId": START_TERRITORY}
+    park["WorldInstance"]["1"] = {"localId": 1, "slotId": 14289, "instanceType": 3,
+                                  "entityId": "3000", "objectState": 4, "upgradeLevel": 0,
+                                  "nurtureClicks": 0, "nurtureEnd": time.time() + 3600}
+    user["park"] = park
+    return user
+
+
+def can_visit(user, other):
+    return other == ADVISOR_ID or other in user.get("friends", [])
+
+
+def visit_user(other):
+    return advisor_user() if other == ADVISOR_ID else load_user(other)
+
+
 # Kept when a player starts a new game (destroydata).
 PERSISTENT = ("friends", "name", "friendCode", "redeemed", "bonusDay", "bonusStreak")
 
@@ -445,9 +472,9 @@ def handle(method, path, query, headers, body):
         arg = seg[1] if len(seg) > 1 else ""
         if arg and arg != mid:
             # another player's park: friends only
-            if arg not in user.get("friends", []):
+            if not can_visit(user, arg):
                 return 200, "<Resources></Resources>"
-            other = load_user(arg)
+            other = visit_user(arg)
             if other.get("xpLevel", 0) > 0:
                 return 200, "<Resources>%s</Resources>" % themeuser_xml(other)
             return 200, "<Resources></Resources>"
@@ -488,9 +515,9 @@ def handle(method, path, query, headers, body):
         other = seg[1] if len(seg) > 1 else "x"
         if other not in ("x", mid):
             # visiting a friend's park (skeleton.h.al)
-            if other not in user.get("friends", []):
+            if not can_visit(user, other):
                 return 200, "<error code=\"403\" type=\"NOT_FRIENDS\" field=\"fullpark\"/>"
-            return 200, fullpark_xml(load_user(other))
+            return 200, fullpark_xml(visit_user(other))
         if dirty:
             save_user(mid, user)
         return 200, fullpark_xml(user)
