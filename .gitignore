@@ -5,3 +5,5 @@ tools/apktool*.jar
 *.keystore
 deploy/deploy.env
 RESEARCH.md
+backups/
+server/data.before-import-*/

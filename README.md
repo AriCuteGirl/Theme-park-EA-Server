@@ -236,10 +236,33 @@ Restart the server after changing it.
 Everything is in `server/data/`:
 
 - `parks/<player>.json`: one file per player, the whole park
-- `state.json`: which device owns which player
-- `requests.log`: request log (rotated at 20 MB)
+- `state.json`: which phone owns which player (needed, or players get new
+  empty parks)
+- `requests.log`: request log (rotated at 20 MB, not included in backups)
 
-Back up the `data` folder. To give a player a fresh start, rename their park file.
+To give a player a fresh start, rename their park file.
+
+**Back up and move a server.** A backup is one `.tar.gz` file with both parts.
+It works in every direction (VM to PC, PC to VM, old VM to new VM):
+
+| Where the server runs | Save a backup | Load a backup |
+|---|---|---|
+| VPS / cloud VM | `bash deploy/backup.sh` | `bash deploy/restore.sh backups/<file>.tar.gz` |
+| Your PC | `python3 tools/data.py export` | `python3 tools/data.py import backups/<file>.tar.gz` |
+
+- Backups are saved in `backups/`. `python3 tools/data.py info <file>` shows
+  which players are inside.
+- Loading keeps the old data next to it (`data.before-restore-...` /
+  `data.before-import-...`), so nothing is lost by mistake.
+- On a PC, stop the server before `import`. On a new VM, run
+  `deploy_oracle.sh` once before `restore.sh`.
+
+**If the server's address changes** (new VM, new IP, new port), the apps still
+point at the old address. Build the app again with the new address and install
+it over the old one. Use the **same signing key** (`tools/themepark.keystore`):
+then the update installs without losing anything, and every phone gets its own
+player and park back. Keep a copy of that key file somewhere safe, and never
+share it.
 
 ## Security
 
@@ -262,7 +285,8 @@ Back up the `data` folder. To give a player a fresh start, rename their park fil
 | `port/stubs/` | Minimal Android/game classes to compile against (not shipped) |
 | `tools/build_port.py` | Builds the 64-bit app |
 | `tools/bfc.py`, `tools/catalog.py` | Read the game's data archive, rebuild `catalog.json` |
-| `deploy/` | Cloud VM deploy script |
+| `deploy/` | VPS deploy, backup and restore scripts |
+| `tools/data.py` | Backup / restore for a server on a PC |
 
 ## Credits
 
