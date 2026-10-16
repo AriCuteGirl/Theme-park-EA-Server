@@ -7,3 +7,4 @@ deploy/deploy.env
 RESEARCH.md
 backups/
 server/data.before-import-*/
+MY-GUIDE.md
