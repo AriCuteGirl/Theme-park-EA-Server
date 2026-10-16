@@ -4,3 +4,4 @@ server/data/
 tools/apktool*.jar
 *.keystore
 deploy/deploy.env
+RESEARCH.md

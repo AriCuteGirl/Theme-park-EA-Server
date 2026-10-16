@@ -161,7 +161,6 @@ Back up the `data` folder. To give a player a fresh start, rename their park fil
 | `tools/build_port.py` | Builds the 64-bit app |
 | `tools/bfc.py`, `tools/catalog.py` | Read the game's data archive, rebuild `catalog.json` |
 | `deploy/` | Cloud VM deploy script |
-| `RESEARCH.md` | Early research notes |
 
 ## Credits
 
