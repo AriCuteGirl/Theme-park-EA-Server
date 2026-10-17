@@ -85,8 +85,8 @@ sudo apt install python3 openjdk-17-jdk-headless unzip wget git
 Download this project and the two extra tools into it:
 
 ```bash
-git clone https://github.com/AriCuteGirl/Theme-park-EA-Fixed.git
-cd Theme-park-EA-Fixed
+git clone https://github.com/AriCuteGirl/Theme-park-EA-Server.git
+cd Theme-park-EA-Server
 wget -O tools/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.11.1/apktool_2.11.1.jar
 wget https://dl.google.com/android/repository/build-tools_r34-linux.zip
 unzip build-tools_r34-linux.zip -d ~/android-build-tools

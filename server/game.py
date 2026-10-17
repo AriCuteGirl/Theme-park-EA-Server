@@ -777,7 +777,8 @@ def handle_tp(mid, user, seg, dirty):
         user.setdefault("redeemed", []).append(code)
         save_user(mid, user)
         cash, tickets = int(reward.get("cash", 0)), int(reward.get("tickets", 0))
-        return _result(True, "Code redeemed: $%d and %d super tickets!" % (cash, tickets),
+        parts = (["$%d" % cash] if cash else []) + (["%d super tickets" % tickets] if tickets else [])
+        return _result(True, "Code redeemed: %s!" % " and ".join(parts or ["nothing"]),
                        cash=cash, tickets=tickets)
     if cmd == "bonuscollected":
         if user.pop("bonusPending", None) is not None or dirty:
