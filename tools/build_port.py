@@ -166,6 +166,20 @@ def main():
                  r"\1\n    invoke-static {}, Lcom/tprevival/State;->parkLoaded()V\n", "park loaded")
     open(p, "w", encoding="utf-8").write(s)
 
+    # no real-money shop: hide the GET MORE! button and make it and the money bar
+    # (both sent action 0 -> store) send an action nothing handles
+    p = os.path.join(smali, "dk", "progressivemedia", "skeleton", "d", "c", "b", "h.smali")
+    s = open(p, encoding="utf-8").read()
+    for field, cls in (("o", "a"), ("l", "e")):
+        s = sub_once(s, r"(iget-object v0, p0, Ldk/progressivemedia/skeleton/d/c/b/h;->%s:Ldk/progressivemedia/skeleton/e/%s;\n"
+                        r"\s*const/4 v1, 0x1\n\s*)const/4 v2, 0x0(\n\s*const/16 v3, 0x7a\n"
+                        r"\s*invoke-virtual \{v0, v1, v2, v3\}, Ldk/progressivemedia/skeleton/e/%s;->a\(III\)V)" % (field, cls, cls),
+                     r"\1const/16 v2, 0x63\2", "GET MORE action (%s)" % field)
+    s = sub_once(s, r"(const/16 v1, 0x81\n\s*invoke-virtual \{v0, v1\}, Ldk/progressivemedia/skeleton/e/a;->m\(I\)V\n)",
+                 r"\1\n    const/4 v1, 0x0\n\n    invoke-virtual {v0, v1}, Ldk/progressivemedia/skeleton/e/a;->a_(Z)V\n",
+                 "hide GET MORE")
+    open(p, "w", encoding="utf-8").write(s)
+
     # tell the server when the daily bonus popup was collected (com.tprevival.Net)
     p = os.path.join(smali, "dk", "progressivemedia", "skeleton", "d", "c", "e.smali")
     s = open(p, encoding="utf-8").read()

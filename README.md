@@ -26,8 +26,8 @@ No game files are in this repository. You need your own copy of the game
 - The Advisor's park in Neighbor Parks
 - Promo codes (for example `REVIVAL`: $10,000 and 5 super tickets, once per player)
 
-Not included on purpose: the real-money shop. Nothing can be bought for real
-money. Super tickets come from playing, levelling up, the daily bonus and codes.
+Not included on purpose: the real-money shop. The GET MORE! button is removed
+and nothing can be bought for real money. Super tickets come from playing, levelling up, the daily bonus and codes.
 
 ## Friends and codes
 
