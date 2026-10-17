@@ -14,7 +14,7 @@
    "tickets": 0
   }
  },
- "startCash": 10000,
+ "startCash": 20000,
  "startTickets": 10,
  "upgradeCostMultiplier": 5,
  "upgradeCostFixed": {
