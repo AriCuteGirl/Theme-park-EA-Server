@@ -226,6 +226,7 @@ script always uses 8086.
 | `timezone` | When a new day starts for the daily bonus (default `Europe/Prague`) |
 | `startCash`, `startTickets` | Money and super tickets a new park starts with (default 20,000 and 10) |
 | `upgradeCostMultiplier` | Multiplies every upgrade price (default 5; the game's own prices are very low) |
+| `ticketPriceMultiplier` | Multiplies the super ticket price of premium (purple) items, at least 1 ticket (default 0.25) |
 | `upgradeCostFixed` | Fixed upgrade prices by item id, e.g. the tutorial's Bouncy Castle (`3000`) and French Friend Fries (`4002`) at $50 |
 | `easyMode` | `true` gives ticket-only items a cash price and every park 500,000 cash and 100 tickets once |
 

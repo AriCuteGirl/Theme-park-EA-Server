@@ -187,10 +187,17 @@ START_CASH = int(SETTINGS.get("startCash", 100000))
 START_TICKETS = int(SETTINGS.get("startTickets", 10))
 
 
+# Super ticket prices of the premium (purple) items, multiplied (at least 1).
+TICKET_MULT = float(SETTINGS.get("ticketPriceMultiplier", 1))
+
+
 def _tune_entity(e):
     if "upgradeCost" in e and (UPGRADE_MULT != 1 or e["entityId"] in UPGRADE_FIXED):
         e = dict(e)
         e["upgradeCost"] = UPGRADE_FIXED.get(e["entityId"], int(round(e["upgradeCost"] * UPGRADE_MULT)))
+    if TICKET_MULT != 1 and e.get("priceSuperTickets", 0) > 0:
+        e = dict(e)
+        e["priceSuperTickets"] = max(1, int(round(e["priceSuperTickets"] * TICKET_MULT)))
     return _easy_entity(e)
 
 

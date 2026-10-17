@@ -20,5 +20,6 @@
  "upgradeCostFixed": {
   "3000": 50,
   "4002": 50
- }
+ },
+ "ticketPriceMultiplier": 0.25
 }
