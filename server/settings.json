@@ -8,6 +8,10 @@
   "REVIVAL": {
    "cash": 10000,
    "tickets": 5
+  },
+  "FREECASH": {
+   "cash": 20000,
+   "tickets": 0
   }
  },
  "startCash": 10000,
