@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "id": "theme-park",
+  "name": "Theme Park",
+  "publisher": "EA (2012)",
+  "platform": "Android",
+  "description": "EA's Theme Park with saving, friends, park visits, daily bonus and promo codes.",
+  "icon": "manager/icon.svg",
+  "art": "manager/art.svg",
+  "accent": "#f97316",
+  "repo": "https://github.com/AriCuteGirl/Theme-park-EA-Server",
+  "source": {"github": "AriCuteGirl/Theme-park-EA-Server", "ref": "main"},
+  "server": {
+    "dir": "server",
+    "files": ["server.py", "game.py", "catalog.json", "settings.json", "manage.py"],
+    "keep_on_update": ["settings.json"],
+    "install_dir": "~/themepark-server",
+    "start": "python3 -u server.py",
+    "requires": "python3 >= 3.9",
+    "env": {
+      "TP_PORT": "{port}",
+      "TP_PUBLIC": "http://{public_host}:{port}"
+    },
+    "ports": [
+      {"name": "game", "label": "Game (HTTP)", "default": 8086, "protocol": "tcp", "required": true}
+    ],
+    "health": {"type": "http", "port": "game", "path": "/director/api/android/getDirectionByPackage", "expect": 200},
+    "data_dir": "data",
+    "log_file": "data/requests.log",
+    "service_name": "themepark",
+    "deploy_script": "deploy/deploy_oracle.sh"
+  },
+  "manage": "server/manage.py",
+  "settings": {
+    "file": "settings.json",
+    "fields": [
+      {"key": "startCash", "label": "Starting money", "help": "Money a new park starts with.", "type": "int", "min": 0},
+      {"key": "startTickets", "label": "Starting super tickets", "help": "Super tickets a new park starts with.", "type": "int", "min": 0},
+      {"key": "upgradeCostMultiplier", "label": "Upgrade price multiplier", "help": "Upgrade prices are multiplied by this.", "type": "float", "min": 0.1, "max": 100},
+      {"key": "ticketPriceMultiplier", "label": "Ticket price multiplier", "help": "Super ticket prices of purple items are multiplied by this.", "type": "float", "min": 0.05, "max": 100},
+      {"key": "easyMode", "label": "Easy mode", "help": "Every park gets lots of money once, and ticket-only items can be bought with money.", "type": "bool"},
+      {"key": "easyStartCash", "label": "Easy mode money", "type": "int", "min": 0, "show_if": "easyMode"},
+      {"key": "easyStartTickets", "label": "Easy mode super tickets", "type": "int", "min": 0, "show_if": "easyMode"},
+      {"key": "timezone", "label": "Daily bonus time zone", "help": "When a new day starts, for example Europe/Prague.", "type": "string"}
+    ],
+    "restart_after_change": true
+  },
+  "promo_codes": {
+    "reward_fields": [
+      {"key": "cash", "label": "Money", "icon": "money"},
+      {"key": "tickets", "label": "Super tickets", "icon": "ticket"}
+    ],
+    "help": "Players type the code in the game (tap the \"Private Server\" label). Each code works once per player."
+  },
+  "currencies": [
+    {"key": "cash", "label": "Money", "icon": "money", "min": 0},
+    {"key": "superTickets", "label": "Super tickets", "icon": "ticket", "min": 0},
+    {"key": "level", "field": "xpLevel", "label": "Park level", "icon": "star", "min": 1, "max": 99}
+  ],
+  "live_edit_warning": "The player must close the game fully first (swipe it away), or the game overwrites your change.",
+  "backup": {"name": "themepark-data-{date}.tar.gz"},
+  "client": {
+    "title": "Build the Theme Park app",
+    "how_to": [
+      "You need the original Theme Park 4.4.92 APK and its OBB folder (unzipped).",
+      "In the Theme Park project folder, run:",
+      "$ APKTOOL=tools/apktool.jar python3 tools/build_port.py <ThemePark-4.4.92.apk> <obb folder> build/ThemePark.apk http://{public_host}:{port}",
+      "Install build/ThemePark.apk on every phone. Uninstall the old EA Theme Park first.",
+      "Everyone keeps their park when you install a new build over the old one (same signing key)."
+    ],
+    "rebuild_when_address_changes": true
+  }
+}

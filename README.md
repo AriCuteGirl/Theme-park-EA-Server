@@ -275,6 +275,26 @@ share it.
 - The server runs as a normal user, not root. Protect your VM's SSH with key
   login only.
 
+## Works with Server Manager
+
+This server works with **Server Manager**, a desktop app that sets up and
+manages revived game servers (status, start/stop, logs, players, settings,
+promo codes, backups). It reads `manager/game.json` and runs
+`server/manage.py` over SSH. You can also use `manage.py` yourself on the
+server; every command prints JSON:
+
+```bash
+cd ~/themepark-server
+python3 manage.py players                  # who plays, money, tickets, level
+python3 manage.py set 1000000002 cash 30000  # player must close the game first
+python3 manage.py codes add MOM '{"cash": 5000, "tickets": 2}'
+python3 manage.py backup                   # -> backups/themepark-data-<date>.tar.gz
+python3 manage.py help
+```
+
+Restart the server after changing settings or codes
+(`sudo systemctl restart themepark`).
+
 ## Project layout
 
 | Path | What it is |
@@ -288,6 +308,8 @@ share it.
 | `tools/bfc.py`, `tools/catalog.py` | Read the game's data archive, rebuild `catalog.json` |
 | `deploy/` | VPS deploy, backup and restore scripts |
 | `tools/data.py` | Backup / restore for a server on a PC |
+| `server/manage.py` | Admin command-line tool with JSON output (Server Manager uses it) |
+| `manager/` | `game.json`, icon and artwork for Server Manager |
 
 ## Credits
 

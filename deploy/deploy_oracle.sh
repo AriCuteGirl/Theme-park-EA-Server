@@ -18,7 +18,7 @@ cd "$(dirname "$0")/.."
 
 echo "== copying server code"
 "${SSH[@]}" "$HOST" 'mkdir -p ~/themepark-server/data'
-/usr/bin/scp -i "$KEY" server/server.py server/game.py server/catalog.json server/settings.json "$HOST":themepark-server/
+/usr/bin/scp -i "$KEY" server/server.py server/game.py server/catalog.json server/settings.json server/manage.py "$HOST":themepark-server/
 
 echo "== installing service + opening port 8086"
 "${SSH[@]}" "$HOST" "PUBLIC_URL='$PUBLIC_URL' bash -s" <<'REMOTE'
